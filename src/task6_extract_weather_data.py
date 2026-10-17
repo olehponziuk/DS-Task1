@@ -2,6 +2,14 @@ import csv
 import re
 from typing import List, Dict
 
+LINE_PATTERN = re.compile(
+    r"Date:\s*(?P<date>\d{4}-\d{2}-\d{2}),\s*"
+    r"Max Temp:\s*(?P<max>-?\d+(?:\.\d+)?)C,\s*"
+    r"Min Temp:\s*(?P<min>-?\d+(?:\.\d+)?)C,\s*"
+    r"Humidity:\s*(?P<humidity>\d+)%,\s*"
+    r"Precipitation:\s*(?P<precip>\d+(?:\.\d+)?)mm"
+)
+
 
 def clean_text(line: str) -> str:
     """
@@ -14,7 +22,9 @@ def clean_text(line: str) -> str:
         str: The cleaned line of text.
     """
     # Replace non-breaking spaces and other non-ASCII characters
-    pass
+    line = line.replace("\xa0", " ")
+    # Dropping the rest also removes the degree sign (and mojibake such as "Â°")
+    return line.encode("ascii", "ignore").decode("ascii").strip()
 
 
 def extract_weather_data(text_file: str) -> List[Dict[str, any]]:
@@ -30,7 +40,20 @@ def extract_weather_data(text_file: str) -> List[Dict[str, any]]:
     Raises:
         FileNotFoundError: If the text file does not exist.
     """
-    pass
+    records = []
+    with open(text_file, "r", encoding="utf-8", errors="replace") as f:
+        for raw_line in f:
+            match = LINE_PATTERN.search(clean_text(raw_line))
+            if not match:
+                continue  # skip blank or malformed lines
+            records.append({
+                "date": match.group("date"),
+                "max_temperature": float(match.group("max")),
+                "min_temperature": float(match.group("min")),
+                "humidity": int(match.group("humidity")),
+                "precipitation": float(match.group("precip")),
+            })
+    return records
 
 
 def save_to_csv(data: List[Dict[str, any]], filename: str = "extracted_weather_data.csv") -> None:
@@ -45,7 +68,15 @@ def save_to_csv(data: List[Dict[str, any]], filename: str = "extracted_weather_d
         IOError: If there is an error writing to the file.
     """
     headers = ["Date", "Max Temperature", "Min Temperature", "Humidity", "Precipitation"]
-    pass
+    try:
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for row in data:
+                writer.writerow([row["date"], row["max_temperature"], row["min_temperature"],
+                                 row["humidity"], row["precipitation"]])
+    except IOError as e:
+        raise IOError(f"Error writing to file '{filename}': {e}")
 
 
 if __name__ == "__main__":

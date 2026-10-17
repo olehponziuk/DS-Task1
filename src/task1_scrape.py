@@ -1,3 +1,4 @@
+import re
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict
@@ -22,7 +23,11 @@ def fetch_wikipedia_page(url: str) -> str:
         requests.HTTPError: If the HTTP request returned an unsuccessful status code.
         requests.RequestException: If there was a network error.
     """
-    pass
+    # Wikipedia rejects requests without a descriptive User-Agent
+    headers = {"User-Agent": "MLDS-Practical-Labs/1.0 (educational web scraping exercise)"}
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()
+    return response.text
 
 
 def extract_title(soup: BeautifulSoup) -> str:
@@ -33,9 +38,10 @@ def extract_title(soup: BeautifulSoup) -> str:
         soup (BeautifulSoup): A BeautifulSoup object representing the parsed HTML.
 
     Returns:
-        str: The title of the page.
+        str: The title of the page, or an empty string if it is not found.
     """
-    pass
+    heading = soup.find("h1", id="firstHeading")
+    return heading.get_text(strip=True) if heading else ""
 
 
 def extract_first_sentence(soup: BeautifulSoup) -> str:
@@ -46,9 +52,19 @@ def extract_first_sentence(soup: BeautifulSoup) -> str:
         soup (BeautifulSoup): A BeautifulSoup object representing the parsed HTML.
 
     Returns:
-        str: The first sentence of the first paragraph.
+        str: The first sentence of the first paragraph, or an empty string if there is none.
     """
-    pass
+    for paragraph in soup.find_all("p"):
+        # Drop footnote markers such as [1] and collapse whitespace
+        text = re.sub(r"\[[^\]]*\]", "", paragraph.get_text())
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            # Wikipedia has empty <p> elements before the real first paragraph
+            continue
+        # A sentence ends at . ! or ? followed by whitespace and a capital letter/digit
+        match = re.search(r"(?<=[.!?])\s+(?=[A-Z0-9])", text)
+        return text[:match.start()] if match else text
+    return ""
 
 
 if __name__ == "__main__":
